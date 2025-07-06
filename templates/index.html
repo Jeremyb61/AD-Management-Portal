@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AD Management Portal</title>
+  <style>
+    .fade-in-alert {
+      animation: fadeInSlide 0.4s ease-out;
+      margin-bottom: 0.5rem;
+    }
+
+    @keyframes fadeInSlide {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light py-5">
+
+  <div class="container">
+
+    <div class="row justify-content-center">
+      <div class="d-flex justify-content-end p-2">
+        <form action="/logout" method="POST">
+          <button type="submit" class="btn btn-outline-primary btn-sm">Logout</button>
+        </form>
+      </div>
+      <div class="col-md-8 col-lg-6">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h2 class="card-title text-center mb-4">Create AD Users</h2>
+            <div id="errorAlertContainer" class="position-relative" style="z-index: 1000;"></div>
+            <div id="errorMessages" class="mt-3 text-danger"></div>
+            <form id="userForm">
+              <div class="mb-3">
+                <label for="firstName" class="form-label">First Name</label>
+                <input type="text" class="form-control" id="firstName" required>
+              </div>
+              <div class="mb-3">
+                <label for="lastName" class="form-label">Last Name</label>
+                <input type="text" class="form-control" id="lastName" required>
+              </div>
+              <div class="mb-3">
+                <label for="username" class="form-label">Username (UPN)</label>
+                <input type="text" class="form-control" id="username" readonly required>
+              </div>
+              <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input class="form-control" type="password" id="password" required>
+              </div>
+              <div class="mb-3">
+                <label for="jobtitle" class="form-label">Job Title</label>
+                <input type="text" class="form-control" id="jobtitle" required>
+              </div>
+              <div class="mb-3">
+                <label for="phonenumber" class="form-label">Phone Number</label>
+                <input type="text" class="form-control" id="phonenumber" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Departments (select one or more)</label><br>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="IT" id="deptIT">
+                  <label class="form-check-label" for="deptIT">IT</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="HR" id="deptHR">
+                  <label class="form-check-label" for="deptHR">HR</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="Finance" id="deptFinance">
+                  <label class="form-check-label" for="deptFinance">Finance</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="Engineering" id="deptEngineering">
+                  <label class="form-check-label" for="deptEngineering">Engineering</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="Marketing" id="deptMarketing">
+                  <label class="form-check-label" for="deptMarketing">Marketing</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="Management" id="deptManagement">
+                  <label class="form-check-label" for="deptManagent">Management</label>
+                </div>
+               
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="Buyers" id="deptBuyers">
+                  <label class="form-check-label" for="deptBuyers">Buyers</label>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary w-100">Create User</button>
+            </form>
+          </div>
+        </div>
+
+        <hr class="my-5">
+
+        <section id="manageUsersSection">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Users</h3>
+            <button id="deleteUsersBtn" class="btn btn-danger" disabled>Delete Selected</button>
+          </div>
+
+          <div id="usersTableContainer" class="table-responsive">
+            <table class="table table-dark table-bordered table-hover align-middle">
+              <thead>
+                <tr>
+                  <th scope="col">Select</th>
+                  <th scope="col">Username</th>
+                  <th scope="col">Display Name</th>
+                  <th scope="col">Job Title</th>
+                  <th scope="col">Phone</th>
+                  <th scope="col">Status</th>
+
+                </tr>
+              </thead>
+              <tbody id="userTableBody">
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+    // Map departments to groups
+    const departmentGroups = {
+      "IT": ["IT_Staff"],
+      "HR": ["HR_Staff"],
+      "Finance": ["Finance_Staff"],
+      "Engineering": ["Engineering_Staff", "GitHub_Access"],
+      "Marketing": ["Marketing_Staff", "Mailchimp_Users", "Wix_Users"],
+      "Management": ["Management_Staff","Sensitive_Folder_Access"],
+      "Buyers": ["Buyers_Staff", "USFoods_Access"]
+    };
+
+    function updateUsername() {
+      const firstName = document.getElementById('firstName').value.trim();
+      const lastName = document.getElementById('lastName').value.trim();
+
+      if (firstName && lastName) {
+        const username = (firstName[0] + lastName).toLowerCase().replace(/[^a-z0-9]/g, '');
+        document.getElementById('username').value = username;
+      }
+    }
+
+    // Display validation errors
+    function showErrorAlert(message) {
+      const alertContainer = document.getElementById("errorAlertContainer");
+
+      const alert = document.createElement("div");
+      alert.className = "alert alert-danger fade-in-alert rounded";
+      alert.role = "alert";
+      alert.innerText = message;
+
+      alertContainer.prepend(alert); // Add new alert to the top
+
+      // Auto-remove after 60 seconds
+      setTimeout(() => {
+        alert.classList.add("fade");
+        alert.classList.remove("fade-in-alert");
+        setTimeout(() => alert.remove(), 300);
+      }, 60000);
+    }
+
+    document.getElementById('firstName').addEventListener('input', updateUsername);
+    document.getElementById('lastName').addEventListener('input', updateUsername);
+
+    function validateUserInput(data) {
+      const errors = [];
+
+      const nameRegex = /^[A-Za-z]{2,20}$/;
+      const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{12,}$/;
+      const phoneRegex = /^\d{10,11}$/;
+      const jobtitleRegex = /^(?=(?:[^0-9]*[0-9]?[^0-9]*$))[A-Za-z0-9 ]{3,}$/;
+
+      // First Name
+      if (!nameRegex.test(data.fn.trim())) {
+        errors.push("First name must be only letters. 2–20 characters.");
+      }
+
+      // Last Name
+      if (!nameRegex.test(data.ln.trim())) {
+        errors.push("Last name must be only letters. 2–20 characters.");
+      }
+
+      // Password
+      if (!passwordRegex.test(data.pw)) {
+        errors.push("Password must be at least 12 characters, and include capitals, numbers, special characters.");
+      }
+
+      // Job title
+      if (!jobtitleRegex.test(data.jt.trim())) {
+        errors.push("Job title must be at least 3 characters, one optional number.");
+      }
+
+      // Phone number
+      if (!phoneRegex.test(data.pn)) {
+        errors.push("Phone number must be 10-11 digits, only numbers.");
+      }
+
+      return errors;
+    }
+
+
+    document.getElementById('userForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const userInput = {
+        "fn" : document.getElementById('firstName').value,
+        "ln" : document.getElementById('lastName').value,
+        "un" : document.getElementById('username').value,
+        "jt" : document.getElementById('jobtitle').value,
+        "pn" : document.getElementById('phonenumber').value,
+        "pw" : document.getElementById('password').value
+      }
+      
+      const validationErrors = validateUserInput(userInput);
+      if (validationErrors.length > 0) {
+        validationErrors.forEach(err => showErrorAlert(err));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+        
+      } else {
+        console.log("Validation passed. Proceed with submission.");
+      
+        const selectedDepts = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(cb => cb.value);
+
+        const allGroups = selectedDepts.flatMap(dept => departmentGroups[dept] || []);
+
+        const uniqueGroups = [...new Set(allGroups)];
+
+        fetch('/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: userInput.fn,
+            lastName: userInput.ln,
+            username: userInput.un,
+            password: userInput.pw,
+            groups: uniqueGroups,
+            jobtitle: userInput.jt,
+            phonenumber: userInput.pn,
+          })
+        })
+        .then(res => res.json())
+        .then(data => {
+              console.log(data)
+          if (data.status === 'success') {
+            alert('User created successfully!');
+            document.getElementById('userForm').reset();
+
+          } else if (data.error === 'user_exists') {
+            const userExistsError = "A user with a name already exists, they will not show up in the list if they are an admin"
+            showErrorAlert(userExistsError);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+
+          }
+        })
+        .catch(err => alert('Request failed: ' + err));
+      
+      }
+      fetchUsers();
+    });
+
+    function fetchUsers() {
+      fetch('/list-managed-users')
+        .then(res => res.json())
+        .then(users => {
+          const tbody = document.getElementById('userTableBody');
+          tbody.innerHTML = ''; // Clear old data
+
+          users.forEach(user => {
+
+            const isEnabled = (user.enabled === true || user.enabled === 'true'); // handles both boolean and string
+
+            const statusBadge = isEnabled
+            ? '<span class="badge bg-success me-2">Enabled</span>'
+            : '<span class="badge bg-danger me-2">Disabled</span>';
+
+            const toggleBtnLabel = isEnabled ? 'Disable' : 'Enable';
+            const toggleBtnClass = isEnabled ? 'btn-warning' : 'btn-success';
+
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>
+                <input type="checkbox" class="form-check-input user-checkbox" value="${user.dn}">
+              </td>
+              <td>${user.username}</td>
+              <td>${user.displayName || ''}</td>
+              <td>${user.jobTitle || ''}</td>
+              <td>${user.phone || ''}</td>
+              <td>
+                ${statusBadge}
+                <button class="btn btn-sm ${toggleBtnClass} toggle-user-btn" data-dn="${user.dn}" data-enabled="${isEnabled}">
+                  ${toggleBtnLabel}
+                </button>
+              </td>
+            `;
+
+            tbody.appendChild(row);
+          });
+        attachCheckboxListeners();
+        attachToggleButtons(); // New
+      })
+      .catch(err => console.error('Failed to load users:', err));
+    }
+
+    function attachToggleButtons() {
+      document.querySelectorAll('.toggle-user-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const dn = btn.getAttribute('data-dn');
+
+          const currentEnabled = btn.dataset.enabled === 'true';
+
+          console.log(`Toggling user: ${dn}, currently enabled: ${currentEnabled}`);
+
+
+          fetch('/toggle-user-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dns: [dn], enabled: !currentEnabled })
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log("***********8",data)
+            if (data.status === 'success' || data.status === 'partial_success') {
+              fetchUsers(); // Refresh the table
+            } else {
+              showErrorAlert('Failed to toggle user status.');
+            }
+          })
+          .catch(err => showErrorAlert('Request failed: ' + err));
+        });
+      });
+    }
+
+
+    function attachCheckboxListeners() {
+
+      const checkboxes = document.querySelectorAll('.user-checkbox');
+
+      checkboxes.forEach(cb => {
+        cb.addEventListener('change', () => {
+          const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+          document.getElementById('deleteUsersBtn').disabled = !anyChecked;
+        });
+      });
+    }
+
+    document.getElementById('deleteUsersBtn').addEventListener('click', () => {
+      const selectedDNs = Array.from(document.querySelectorAll('.user-checkbox:checked'))
+        .map(cb => cb.value);
+
+      if (selectedDNs.length === 0) return;
+
+      if (!confirm(`Are you sure you want to delete ${selectedDNs.length} user(s)?`)) return;
+
+      fetch('/delete-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dns: selectedDNs })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'success') {
+
+            const alertContainer = document.getElementById("errorAlertContainer");
+            const alert = document.createElement("div");
+            alert.className = "alert alert-success fade-in-alert rounded";
+            alert.role = "alert";
+            alert.innerText = `Deleted ${selectedDNs.length} user(s) successfully.`;
+            alertContainer.prepend(alert);
+
+            fetchUsers(); // refresh list
+            document.getElementById('deleteUsersBtn').disabled = true;
+
+          } else {
+            showErrorAlert('Failed to delete users.');
+          }
+        })
+        .catch(err => showErrorAlert('Request failed: ' + err));
+    });
+
+    fetchUsers();
+
+
+  </script>
+
+</body>
+</html>
